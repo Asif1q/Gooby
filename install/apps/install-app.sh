@@ -23,6 +23,7 @@ else
 		echo ""
 		[[ -f "/opt/Gooby/scripts/${PROXYVERSION}/${APPLOC}.yaml" ]] && echo " ${LYELLOW}S${STD} - ${TASK} Stable"
 		[[ -f "/opt/Gooby/scripts/${PROXYVERSION}/${APPLOC}-beta.yaml" ]] && echo " ${LYELLOW}B${STD} - ${TASK} Beta"
+		[[ -d "/dev/dri" "/opt/Gooby/scripts/${PROXYVERSION}/${APPLOC}-hw.yaml" ]] && echo " ${LYELLOW}H${STD} - ${TASK} Hardware decode"
 		echo "--------------------------------------------------"
 		echo ""
 		read -n 1 -s -r -p " ---> "
@@ -31,6 +32,7 @@ else
 		case "${REPLY}" in
 			s|S ) APPLOC=${APPLOC} ;;
 			b|B ) [[ -f "/opt/Gooby/scripts/${PROXYVERSION}/${APPLOC}-beta.yaml" ]] && APPLOC=${APPLOC}-beta ;;
+			h|H ) [[ -d "/dev/dri" "/opt/Gooby/scripts/${PROXYVERSION}/${APPLOC}-hw.yaml" ]] && APPLOC=${APPLOC}-hwdecode ;;
 			* ) APPLOC=${APPLOC} ;;
 		esac
 
@@ -82,6 +84,43 @@ else
 		cd "${CURDIR}"
 
 		if [ ${APP} == organizr ]; then APP=${ORGMENU}; fi
+
+		if [[ ${TASK} = "Plex" && -d "/dev/dri"  && ! -d ${CONFIGS}/${TASK} ]]; then
+
+			clear
+			echo "${YELLOW}"
+			echo "--------------------------------------------------"
+			echo " Plex use the Hardware transcode over iGPU starting "
+			echo " Please wait Plex Docker will be patched"
+			echo "--------------------------------------------------"
+			echo ""
+
+			INTEL="$(lspci | grep VGA | cut -d ":" -f3 | awk '{print $1}' | grep Intel)"
+			if [[ "$INTEL" == "Intel" ]]; then apt-get install intel-gpu-tools -yqq; fi
+
+			chmod -R 777 /dev/dri
+
+			X=$(docker exec plex bash -c "command -v vainfo > /dev/null && echo yes || echo no")
+			if [[ ${X} = "no" || ${1} = "force" ]]; then
+				docker exec plex apt-get -yqq update
+				docker exec plex apt-get -yqq install i965-va-driver vainfo
+				docker restart plex
+				GPU=$(lspci | grep VGA | cut -d ":" -f3)
+				RAM=$(cardid=$(lspci | grep VGA |cut -d " " -f1);lspci -v -s $cardid | grep " prefetchable"| cut -d "=" -f2)
+			else
+				echo Intel GPU Driver for Plex already installed
+			fi
+
+			echo "${GREEN}"
+			echo "--------------------------------------------------"
+			echo " Plex Docker patch for Hardware transcode"
+			echo " over iGPU finished "
+			echo "--------------------------------------------------"
+			echo " Used " $GPU "and "$RAM "RAM"
+			echo "--------------------------------------------------"
+			echo ""
+
+		fi
 
 		APPINSTALLED
 
